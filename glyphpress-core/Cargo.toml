@@ -1,0 +1,17 @@
+
+[package]
+name = "glyphpress-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "OpenType and TrueType SFNT parser, validator, and glyph subsetter."
+readme = "../README.md"
+
+[lib]
+name = "glyphpress_core"
+path = "src/lib.rs"
+
+[features]
+default = ["std"]
+std = []
