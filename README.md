@@ -10,18 +10,20 @@ recalculated checksums.
 ## Building
 
 ```sh
-cargo vendor
+cargo vendor vendor
 cargo check --workspace --offline
 ```
+
+ClusterFuzzLite runs `cargo vendor` during the build (dependencies are not committed).
 
 ## Fuzzing
 
 ```sh
-cargo fuzz run sfnt_fuzzer --offline
+cargo fuzz run sfnt_fuzzer
 ```
 
 See [docs/OPENTYPE.md](docs/OPENTYPE.md) for table coverage notes.
 
-ClusterFuzzLite builds use `.clusterfuzzlite/build.sh` with vendored crates for fully offline CI.
-The library targets embedded devices with zero-copy table views and scratch outline walks.
-Subset emit rebuilds trimmed SFNT tables with recalculated checksums for constrained targets.
+## License
+
+MIT
