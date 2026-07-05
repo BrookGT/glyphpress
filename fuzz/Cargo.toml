@@ -1,9 +1,9 @@
 
 [package]
 name = "glyphpress-fuzz"
-version = "0.0.0"
+version.workspace = true
+edition.workspace = true
 publish = false
-edition = "2021"
 
 [package.metadata]
 cargo-fuzz = true

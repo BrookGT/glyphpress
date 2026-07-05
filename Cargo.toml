@@ -1,8 +1,7 @@
 
 [workspace]
 resolver = "2"
-members = ["glyphpress-core"]
-exclude = ["fuzz"]
+members = ["glyphpress-core", "fuzz"]
 
 [workspace.package]
 version = "0.1.0"

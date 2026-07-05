@@ -4,7 +4,7 @@ cd "$SRC"
 
 export CARGO_TARGET_DIR="$SRC/target"
 
-# Vendor at build time (not checked into git).
+# Vendor workspace deps (fuzz crate pulls libfuzzer-sys from crates.io).
 cargo vendor vendor
 mkdir -p .cargo
 cat > .cargo/config.toml <<'EOF'
@@ -31,7 +31,7 @@ done
 
 cargo build \
   --release \
-  --manifest-path fuzz/Cargo.toml \
+  --package glyphpress-fuzz \
   --features libfuzzer \
   "${BIN_ARGS[@]}"
 
