@@ -1,0 +1,12 @@
+language: rust
+fuzzing_engines:
+  - libfuzzer
+sanitizers:
+  - address
+fuzz_targets:
+  - sfnt_fuzzer
+  - cmap_fuzzer
+  - glyf_fuzzer
+  - name_fuzzer
+  - subset_fuzzer
+  - pipeline_fuzzer
