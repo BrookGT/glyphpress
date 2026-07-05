@@ -1,13 +1,13 @@
 //! Load SFNT font and parse core tables.
 
 
-use crate::error::{GlyphError, GlyphResult};
-use crate::mem::LayoutScratch;
+use crate::error::GlyphResult;
+use crate::pipeline::session::SubsetEmitSession;
 use crate::sfnt::directory::TableDirectory;
 use crate::tables::{
-    cmap::CmapTable, glyf::GlyfTable, gsub::GsubTable, head::HeadTable, hhea::HheaTable,
-    hmtx::HmtxTable, loca::LocaTable, maxp::MaxpTable, name::NameTable, os2::Os2Table,
-    post::PostTable,
+    cmap::CmapTable, glyf::GlyfTable, gdef::GdefTable, gsub::GsubTable, head::HeadTable,
+    hhea::HheaTable, hmtx::HmtxTable, loca::LocaTable, maxp::MaxpTable, name::NameTable,
+    os2::Os2Table, post::PostTable,
 };
 
 pub struct LoadedFont<'a> {
@@ -23,7 +23,7 @@ pub struct LoadedFont<'a> {
     pub os2: Option<Os2Table>,
     pub post: PostTable,
     pub glyf: GlyfTable<'a>,
-    pub layout: std::cell::RefCell<LayoutScratch>,
+    pub session: std::cell::RefCell<SubsetEmitSession>,
 }
 
 impl<'a> LoadedFont<'a> {
@@ -55,14 +55,31 @@ impl<'a> LoadedFont<'a> {
         )?;
         let glyf_bytes = directory.table_bytes(data, 0x676C7966)?;
         let glyf = GlyfTable::new(glyf_bytes);
-        let mut layout = LayoutScratch::new();
+
+        let mut session = SubsetEmitSession::new();
         if let Ok(gsub_bytes) = directory.table_bytes(data, 0x47535542) {
             if let Ok(gsub) = GsubTable::parse(gsub_bytes) {
                 if let Some(lookup) = gsub.primary_lookup_slice(gsub_bytes) {
-                    let _ = layout.pin_gsub_lookup(lookup);
+                    let _ = session.pin_gsub_lookup(lookup);
                 }
             }
         }
+        if let Ok(gdef_bytes) = directory.table_bytes(data, 0x47444546) {
+            if let Ok(gdef) = GdefTable::parse(gdef_bytes) {
+                if gdef.glyph_class_def_offset != 0 {
+                    let off = gdef.glyph_class_def_offset as usize;
+                    if off < gdef_bytes.len() {
+                        let _ = session.pin_gdef_classdef(&gdef_bytes[off..]);
+                    }
+                }
+            }
+        }
+        if let Some(sub) = cmap.best_unicode_subtable() {
+            if sub.format == 4 {
+                let _ = session.pin_cmap_subtable(&sub.data);
+            }
+        }
+
         Ok(Self {
             data,
             directory,
@@ -76,7 +93,7 @@ impl<'a> LoadedFont<'a> {
             os2,
             post,
             glyf,
-            layout: std::cell::RefCell::new(layout),
+            session: std::cell::RefCell::new(session),
         })
     }
 
@@ -84,20 +101,24 @@ impl<'a> LoadedFont<'a> {
         let (start, end) = self.loca.glyph_range(gid)?;
         self.glyf.slice_for_range(start, end)
     }
+
+    /// Advance emit generation then reread all cross-table pinned views.
+    pub fn run_subset_emit_plan(&self) -> GlyphResult<()> {
+        let mut session = self.session.borrow_mut();
+        session.bump_emit_generation()?;
+        session.replay_pinned_tables()
+    }
 }
 
 impl<'a> LoadedFont<'a> {
-    pub fn num_glyphs(&self) -> u16 { self.maxp.num_glyphs }
-    pub fn family(&self) -> crate::GlyphResult<Option<String>> { self.name.family_name() }
-    pub fn verify_core_checksums(&self) -> crate::GlyphResult<()> {
-        self.directory.verify_checksum(self.data, 0x68656164)?;
-        Ok(())
+    pub fn num_glyphs(&self) -> u16 {
+        self.maxp.num_glyphs
     }
-
-    pub fn prepare_layout_emit(&self) -> GlyphResult<()> {
-        let mut scratch = self.layout.borrow_mut();
-        scratch.warmup_emit_tail()?;
-        let _ = scratch.coverage_glyph_id(0)?;
+    pub fn family(&self) -> crate::GlyphResult<Option<String>> {
+        self.name.family_name()
+    }
+    pub fn verify_core_checksums(&self) -> GlyphResult<()> {
+        self.directory.verify_checksum(self.data, 0x68656164)?;
         Ok(())
     }
 }
