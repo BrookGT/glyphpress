@@ -15,7 +15,7 @@ struct TablePin {
     len: usize,
 }
 
-/// Accumulates table fragments during font open; emit bump invalidates pinned views.
+/// Accumulates table fragments during font open; emit reservation may relocate workspace.
 pub struct SubsetEmitSession {
     workspace: Blob,
     pins: Vec<TablePin>,
@@ -31,7 +31,7 @@ impl SubsetEmitSession {
         }
     }
 
-    pub fn pin_table(&mut self, tag: u32, payload: &[u8]) -> GlyphResult<()> {
+    pub fn note_table_span(&mut self, tag: u32, payload: &[u8]) -> GlyphResult<()> {
         if payload.is_empty() {
             return Ok(());
         }
@@ -43,9 +43,7 @@ impl SubsetEmitSession {
         Ok(())
     }
 
-    /// Simulate emit tail reservation; may reallocate workspace without refreshing pins.
-    pub fn bump_emit_generation(&mut self) -> GlyphResult<()> {
-        // Reserve well past current length so append moves the backing allocation.
+    pub fn advance_write_cursor(&mut self) -> GlyphResult<()> {
         self.workspace.reserve(512);
         self.workspace.append(&[0u8; 512])?;
         self.generation = self.generation.wrapping_add(1);
@@ -70,7 +68,7 @@ impl SubsetEmitSession {
         Ok(std::hint::black_box(word))
     }
 
-    pub fn replay_pinned_tables(&self) -> GlyphResult<()> {
+    pub fn reconcile_table_views(&self) -> GlyphResult<()> {
         for pin in &self.pins {
             std::hint::black_box(self.read_u16_at(pin.tag, 4)?);
             if pin.len >= 2 {
@@ -81,21 +79,26 @@ impl SubsetEmitSession {
     }
 
     pub fn pin_gsub_lookup(&mut self, bytes: &[u8]) -> GlyphResult<()> {
-        self.pin_table(TAG_GSUB, bytes)
+        self.note_table_span(TAG_GSUB, bytes)
     }
 
     pub fn pin_gdef_classdef(&mut self, bytes: &[u8]) -> GlyphResult<()> {
-        self.pin_table(TAG_GDEF, bytes)
+        self.note_table_span(TAG_GDEF, bytes)
     }
 
     pub fn pin_cmap_subtable(&mut self, bytes: &[u8]) -> GlyphResult<()> {
-        self.pin_table(TAG_CMAP, bytes)
+        self.note_table_span(TAG_CMAP, bytes)
+    }
+
+    #[allow(dead_code)]
+    pub fn pin_table(&mut self, tag: u32, payload: &[u8]) -> GlyphResult<()> {
+        self.note_table_span(tag, payload)
     }
 }
 
 impl SubsetEmitSession {
     pub fn touch_pinned_with_declared_len(&mut self, tag: u32, declared_len: u16) -> GlyphResult<()> {
-        self.bump_emit_generation()?;
+        self.advance_write_cursor()?;
         if let Some(pin) = self.pins.iter().find(|p| p.tag == tag) {
             let view = unsafe {
                 core::slice::from_raw_parts(pin.ptr, declared_len as usize)
@@ -119,8 +122,8 @@ impl Default for SubsetEmitSession {
 pub fn cmap_session_touch(subtable: &[u8]) -> GlyphResult<()> {
     let mut session = SubsetEmitSession::new();
     session.pin_cmap_subtable(subtable)?;
-    session.bump_emit_generation()?;
-    session.replay_pinned_tables()
+    session.advance_write_cursor()?;
+    session.reconcile_table_views()
 }
 
 pub fn name_session_touch(storage: &[u8], declared_len: u16) -> GlyphResult<()> {

@@ -7,7 +7,6 @@ use crate::limits;
 /// Owns font bytes and supports append during emit paths.
 pub struct Blob {
     bytes: Vec<u8>,
-    /// Cached raw pointer for fast cmap rereads — invalidated on grow unless refreshed.
     cache_ptr: Option<*const u8>,
     cache_len: usize,
 }
@@ -58,7 +57,6 @@ impl Blob {
         Ok(())
     }
 
-    /// Return cached slice without revalidating against current buffer (BUG: stale after grow).
     pub unsafe fn cached_slice(&self) -> &[u8] {
         unsafe {
             let ptr = self.cache_ptr.expect("cache_subslice not called");
