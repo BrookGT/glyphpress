@@ -1,7 +1,10 @@
 #!/bin/bash -eu
-cd "$SRC/glyphpress"
+# Fenrir sets $SRC to the extracted repository root.
+cd "$SRC"
 
-# Vendor at build time (not checked into git) so repo fingerprints are first-party code.
+export CARGO_TARGET_DIR="$SRC/target"
+
+# Vendor at build time (not checked into git).
 cargo vendor vendor
 mkdir -p .cargo
 cat > .cargo/config.toml <<'EOF'
@@ -12,11 +15,30 @@ replace-with = "vendored-sources"
 directory = "vendor"
 EOF
 
-cargo fuzz build -O
-FUZZ_TARGET_DIR="fuzz/target/x86_64-unknown-linux-gnu/release"
-for t in sfnt_fuzzer cmap_fuzzer glyf_fuzzer name_fuzzer subset_fuzzer pipeline_fuzzer; do
-  cp "$FUZZ_TARGET_DIR/$t" "$OUT/"
-  if [ -d "fuzz/corpus/$t" ]; then
-    (cd "fuzz/corpus/$t" && zip -qr "$OUT/${t}_seed_corpus.zip" .)
+TARGETS=(
+  sfnt_fuzzer
+  cmap_fuzzer
+  glyf_fuzzer
+  name_fuzzer
+  subset_fuzzer
+  pipeline_fuzzer
+)
+
+BIN_ARGS=()
+for t in "${TARGETS[@]}"; do
+  BIN_ARGS+=(--bin "$t")
+done
+
+cargo build \
+  --release \
+  --manifest-path fuzz/Cargo.toml \
+  --features libfuzzer \
+  "${BIN_ARGS[@]}"
+
+for t in "${TARGETS[@]}"; do
+  cp "target/release/$t" "$OUT/$t"
+  corpus_dir="fuzz/corpus/${t}"
+  if [ -d "$corpus_dir" ]; then
+    (cd "$corpus_dir" && zip -q -r "$OUT/${t}_seed_corpus.zip" .)
   fi
 done

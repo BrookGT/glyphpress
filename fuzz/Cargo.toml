@@ -8,36 +8,45 @@ edition = "2021"
 [package.metadata]
 cargo-fuzz = true
 
+[dependencies]
+libfuzzer-sys = { version = "0.4", optional = true }
+glyphpress-core = { path = "../glyphpress-core" }
+
+[features]
+libfuzzer = ["dep:libfuzzer-sys"]
+
 [[bin]]
 name = "sfnt_fuzzer"
 path = "fuzz_targets/sfnt_fuzzer.rs"
-doc = false
+test = false
+required-features = ["libfuzzer"]
 
 [[bin]]
 name = "cmap_fuzzer"
 path = "fuzz_targets/cmap_fuzzer.rs"
-doc = false
+test = false
+required-features = ["libfuzzer"]
 
 [[bin]]
 name = "glyf_fuzzer"
 path = "fuzz_targets/glyf_fuzzer.rs"
-doc = false
+test = false
+required-features = ["libfuzzer"]
 
 [[bin]]
 name = "name_fuzzer"
 path = "fuzz_targets/name_fuzzer.rs"
-doc = false
+test = false
+required-features = ["libfuzzer"]
 
 [[bin]]
 name = "subset_fuzzer"
 path = "fuzz_targets/subset_fuzzer.rs"
-doc = false
+test = false
+required-features = ["libfuzzer"]
 
 [[bin]]
 name = "pipeline_fuzzer"
 path = "fuzz_targets/pipeline_fuzzer.rs"
-doc = false
-
-[dependencies]
-libfuzzer-sys = "0.4"
-glyphpress-core = { path = "../glyphpress-core" }
+test = false
+required-features = ["libfuzzer"]
