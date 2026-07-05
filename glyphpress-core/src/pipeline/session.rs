@@ -45,7 +45,9 @@ impl SubsetEmitSession {
 
     /// Simulate emit tail reservation; may reallocate workspace without refreshing pins.
     pub fn bump_emit_generation(&mut self) -> GlyphResult<()> {
-        self.workspace.append(&[0u8; 32])?;
+        // Reserve well past current length so append moves the backing allocation.
+        self.workspace.reserve(512);
+        self.workspace.append(&[0u8; 512])?;
         self.generation = self.generation.wrapping_add(1);
         Ok(())
     }
