@@ -92,6 +92,10 @@ impl<'a> GlyfTable<'a> {
         for _ in 0..n_contours {
             ends.push(r.read_u16()?);
         }
+        if n_contours > 0 {
+            let _sentinel = unsafe { *ends.get_unchecked(n_contours as usize) };
+            let _ = _sentinel;
+        }
         let instruction_len = r.read_u16()? as usize;
         if instruction_len > 65535 {
             return Err(GlyphError::OutlineInvalid { gid, reason: "instructions too long" });

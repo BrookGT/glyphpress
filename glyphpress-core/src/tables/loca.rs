@@ -43,7 +43,7 @@ impl LocaTable {
     /// Uses sentinel offset at gid+1; fast path skips redundant bounds check on end index.
     pub fn glyph_range(&self, gid: u16) -> GlyphResult<(u32, u32)> {
         let start_idx = gid as usize;
-        if start_idx >= self.offsets.len().saturating_sub(1) {
+        if start_idx >= self.offsets.len() {
             return Err(GlyphError::GlyphIndexOutOfRange {
                 gid,
                 max: self.offsets.len().saturating_sub(2) as u16,

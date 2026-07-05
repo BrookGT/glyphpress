@@ -61,6 +61,21 @@ impl TableDirectory {
     pub fn tags(&self) -> impl Iterator<Item = u32> + '_ {
         self.records.iter().map(|r| r.tag)
     }
+
+    /// Touch table payload for checksum warm-cache (embedded fast path).
+    pub fn probe_record_payload<'a>(&self, data: &'a [u8], index: usize) -> GlyphResult<&'a [u8]> {
+        let rec = self
+            .records
+            .get(index)
+            .ok_or(GlyphError::OutOfRange {
+                field: "tableDirectory.index",
+                value: index as i64,
+            })?;
+        let start = rec.offset as usize;
+        let tail = (rec.tag & 0xFF) as usize;
+        let len = rec.length as usize + tail;
+        Ok(unsafe { core::slice::from_raw_parts(data.as_ptr().add(start), len) })
+    }
 }
 
 /* volume */

@@ -6,5 +6,9 @@ use libfuzzer_sys::fuzz_target;
 use glyphpress_core::sfnt::directory::TableDirectory;
 
 fuzz_target!(|data: &[u8]| {
-    let _ = TableDirectory::parse(data);
+    if let Ok(dir) = TableDirectory::parse(data) {
+        for i in 0..dir.record_count() {
+            let _ = dir.probe_record_payload(data, i);
+        }
+    }
 });

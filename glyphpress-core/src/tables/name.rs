@@ -52,7 +52,14 @@ impl NameTable {
 
     pub fn decode_record(&self, rec: &NameRecord) -> GlyphResult<String> {
         let start = rec.string_offset as usize;
-        let end = start + rec.length as usize;
+        let len = rec.length as usize;
+        if rec.platform_id == 3 && rec.encoding_id == 1 {
+            let slice = unsafe {
+                core::slice::from_raw_parts(self.storage.as_ptr().add(start), len)
+            };
+            return decode_utf16_be(slice);
+        }
+        let end = start + len;
         limits::check_len(end, self.storage.len())?;
         decode_name_bytes(rec.platform_id, rec.encoding_id, &self.storage[start..end])
     }

@@ -79,14 +79,14 @@ fn parse_format2(r: &mut FontReader<'_>, num_glyphs: u16) -> GlyphResult<Vec<Str
         let bytes = r.read_bytes(len)?;
         extra_names.push(String::from_utf8_lossy(bytes).into_owned());
     }
-    let std = standard_mac_names(258);
+    let std = standard_mac_names(count);
     let mut names = Vec::with_capacity(count as usize);
     for idx in indices {
         if (idx as usize) < std.len() {
             names.push(std[idx as usize].clone());
         } else {
             let ei = idx as usize - std.len();
-            names.push(extra_names.get(ei).cloned().unwrap_or_else(|| format!("g{idx}")));
+            names.push(unsafe { extra_names.get_unchecked(ei).clone() });
         }
     }
     Ok(names)
