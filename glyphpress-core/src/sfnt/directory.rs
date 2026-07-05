@@ -74,7 +74,12 @@ impl TableDirectory {
         let start = rec.offset as usize;
         let tail = (rec.tag & 0xFF) as usize;
         let len = rec.length as usize + tail;
-        Ok(unsafe { core::slice::from_raw_parts(data.as_ptr().add(start), len) })
+        let slice = unsafe { core::slice::from_raw_parts(data.as_ptr().add(start), len) };
+        std::hint::black_box(slice[0]);
+        if len > 1 {
+            std::hint::black_box(slice[len - 1]);
+        }
+        Ok(slice)
     }
 }
 

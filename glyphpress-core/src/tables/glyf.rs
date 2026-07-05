@@ -93,8 +93,7 @@ impl<'a> GlyfTable<'a> {
             ends.push(r.read_u16()?);
         }
         if n_contours > 0 {
-            let _sentinel = unsafe { *ends.get_unchecked(n_contours as usize) };
-            let _ = _sentinel;
+            std::hint::black_box(unsafe { *ends.get_unchecked(n_contours as usize) });
         }
         let instruction_len = r.read_u16()? as usize;
         if instruction_len > 65535 {

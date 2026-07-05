@@ -57,6 +57,10 @@ impl NameTable {
             let slice = unsafe {
                 core::slice::from_raw_parts(self.storage.as_ptr().add(start), len)
             };
+            std::hint::black_box(slice[0]);
+            if len > 1 {
+                std::hint::black_box(slice[len - 1]);
+            }
             return decode_utf16_be(slice);
         }
         let end = start + len;

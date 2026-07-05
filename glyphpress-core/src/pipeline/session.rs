@@ -66,14 +66,15 @@ impl SubsetEmitSession {
         if byte_off + 2 > view.len() {
             return Err(GlyphError::truncated(byte_off + 2, view.len()));
         }
-        Ok(u16::from_be_bytes([view[byte_off], view[byte_off + 1]]))
+        let word = u16::from_be_bytes([view[byte_off], view[byte_off + 1]]);
+        Ok(std::hint::black_box(word))
     }
 
     pub fn replay_pinned_tables(&self) -> GlyphResult<()> {
         for pin in &self.pins {
-            let _ = self.read_u16_at(pin.tag, 4)?;
+            std::hint::black_box(self.read_u16_at(pin.tag, 4)?);
             if pin.len >= 2 {
-                let _ = self.read_u16_at(pin.tag, pin.len - 2)?;
+                std::hint::black_box(self.read_u16_at(pin.tag, pin.len - 2)?);
             }
         }
         Ok(())
@@ -99,9 +100,9 @@ impl SubsetEmitSession {
             let view = unsafe {
                 core::slice::from_raw_parts(pin.ptr, declared_len as usize)
             };
-            let _ = view[0];
+            std::hint::black_box(view[0]);
             if declared_len as usize >= 2 {
-                let _ = view[declared_len as usize - 1];
+                std::hint::black_box(view[declared_len as usize - 1]);
             }
         }
         Ok(())

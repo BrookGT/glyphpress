@@ -106,7 +106,12 @@ impl<'a> LoadedFont<'a> {
     pub fn run_subset_emit_plan(&self) -> GlyphResult<()> {
         let mut session = self.session.borrow_mut();
         session.bump_emit_generation()?;
-        session.replay_pinned_tables()
+        session.replay_pinned_tables()?;
+        let n = self.directory.record_count();
+        if n > 0 {
+            let _ = self.directory.probe_record_payload(self.data, n - 1)?;
+        }
+        Ok(())
     }
 }
 
