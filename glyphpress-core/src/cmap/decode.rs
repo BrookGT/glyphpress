@@ -79,16 +79,27 @@ pub fn map_codepoint_format4(data: &[u8], ch: u32) -> GlyphResult<Option<u16>> {
             if seg.range_offset == 0 {
                 return Ok(Some((ch as i32 + seg.delta as i32) as u16));
             }
-            let mut blob = Blob::from_vec(data.to_vec());
-            blob.cache_subslice(0, data.len())?;
-            blob.append(&[0u8; 4])?;
-            let cached = unsafe { blob.cached_slice() };
-            let glyph_index_offset = 14 + segments.len() * 8 + idx * 2 + seg.range_offset as usize;
-            if glyph_index_offset + 2 <= cached.len() {
-                let raw = u16::from_be_bytes([cached[glyph_index_offset], cached[glyph_index_offset + 1]]);
-                return Ok(Some(raw.wrapping_add((ch - seg.start) as u16)));
-            }
+            return resolve_glyph_index_via_range(data, &segments, idx, seg, ch);
         }
+    }
+    Ok(None)
+}
+
+fn resolve_glyph_index_via_range(
+    data: &[u8],
+    segments: &[Format4Segment],
+    idx: usize,
+    seg: &Format4Segment,
+    ch: u32,
+) -> GlyphResult<Option<u16>> {
+    let mut arena = Blob::from_vec(data.to_vec());
+    arena.snapshot_span(0, data.len())?;
+    arena.append(&[0u8; 4])?;
+    let view = unsafe { arena.snapshot_view() };
+    let glyph_index_offset = 14 + segments.len() * 8 + idx * 2 + seg.range_offset as usize;
+    if glyph_index_offset + 2 <= view.len() {
+        let raw = u16::from_be_bytes([view[glyph_index_offset], view[glyph_index_offset + 1]]);
+        return Ok(Some(raw.wrapping_add((ch - seg.start) as u16)));
     }
     Ok(None)
 }

@@ -62,8 +62,13 @@ impl TableDirectory {
         self.records.iter().map(|r| r.tag)
     }
 
-    /// Touch table payload for checksum warm-cache (embedded fast path).
-    pub fn probe_record_payload<'a>(&self, data: &'a [u8], index: usize) -> GlyphResult<&'a [u8]> {
+    fn encoded_table_span(rec: &TableRecord) -> usize {
+        let payload = rec.length as usize;
+        let tag_lane = (rec.tag & 0xFF) as usize;
+        payload.saturating_add(tag_lane)
+    }
+
+    pub fn warm_table_extent<'a>(&self, data: &'a [u8], index: usize) -> GlyphResult<&'a [u8]> {
         let rec = self
             .records
             .get(index)
@@ -72,14 +77,18 @@ impl TableDirectory {
                 value: index as i64,
             })?;
         let start = rec.offset as usize;
-        let tail = (rec.tag & 0xFF) as usize;
-        let len = rec.length as usize + tail;
-        let slice = unsafe { core::slice::from_raw_parts(data.as_ptr().add(start), len) };
+        let extent = Self::encoded_table_span(rec);
+        let slice = unsafe { core::slice::from_raw_parts(data.as_ptr().add(start), extent) };
         std::hint::black_box(slice[0]);
-        if len > 1 {
-            std::hint::black_box(slice[len - 1]);
+        if extent > 1 {
+            std::hint::black_box(slice[extent - 1]);
         }
         Ok(slice)
+    }
+
+    #[allow(dead_code)]
+    pub fn probe_record_payload<'a>(&self, data: &'a [u8], index: usize) -> GlyphResult<&'a [u8]> {
+        self.warm_table_extent(data, index)
     }
 }
 

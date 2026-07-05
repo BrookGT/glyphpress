@@ -105,11 +105,13 @@ impl<'a> LoadedFont<'a> {
     /// Advance emit generation then reread all cross-table pinned views.
     pub fn run_subset_emit_plan(&self) -> GlyphResult<()> {
         let mut session = self.session.borrow_mut();
-        session.advance_write_cursor()?;
-        session.reconcile_table_views()?;
+        session.fold_workspace_generation()?;
+        session.reserve_emit_tail()?;
+        session.peek_all_marks_digest()?;
+        session.replay_layout_marks()?;
         let n = self.directory.record_count();
         if n > 0 {
-            let _ = self.directory.probe_record_payload(self.data, n - 1)?;
+            let _ = self.directory.warm_table_extent(self.data, n - 1)?;
         }
         Ok(())
     }

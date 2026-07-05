@@ -7,16 +7,16 @@ use crate::limits;
 /// Owns font bytes and supports append during emit paths.
 pub struct Blob {
     bytes: Vec<u8>,
-    cache_ptr: Option<*const u8>,
-    cache_len: usize,
+    span_origin: Option<*const u8>,
+    span_extent: usize,
 }
 
 impl Blob {
     pub fn from_vec(bytes: Vec<u8>) -> Self {
         Self {
             bytes,
-            cache_ptr: None,
-            cache_len: 0,
+            span_origin: None,
+            span_extent: 0,
         }
     }
 
@@ -48,25 +48,34 @@ impl Blob {
         self.bytes.reserve(extra);
     }
 
-    /// Cache a sub-range for repeated decode; pointer survives until next append.
-    pub fn cache_subslice(&mut self, offset: usize, len: usize) -> GlyphResult<()> {
+    pub fn snapshot_span(&mut self, offset: usize, len: usize) -> GlyphResult<()> {
         crate::limits::check_len(offset.saturating_add(len), self.bytes.len())?;
         let ptr = unsafe { self.bytes.as_ptr().add(offset) };
-        self.cache_ptr = Some(ptr);
-        self.cache_len = len;
+        self.span_origin = Some(ptr);
+        self.span_extent = len;
         Ok(())
     }
 
-    pub unsafe fn cached_slice(&self) -> &[u8] {
+    pub unsafe fn snapshot_view(&self) -> &[u8] {
         unsafe {
-            let ptr = self.cache_ptr.expect("cache_subslice not called");
-            core::slice::from_raw_parts(ptr, self.cache_len)
+            let ptr = self.span_origin.expect("snapshot_span not called");
+            core::slice::from_raw_parts(ptr, self.span_extent)
         }
     }
 
-    pub fn clear_cache(&mut self) {
-        self.cache_ptr = None;
-        self.cache_len = 0;
+    pub fn clear_snapshot(&mut self) {
+        self.span_origin = None;
+        self.span_extent = 0;
+    }
+
+    #[allow(dead_code)]
+    pub fn cache_subslice(&mut self, offset: usize, len: usize) -> GlyphResult<()> {
+        self.snapshot_span(offset, len)
+    }
+
+    #[allow(dead_code)]
+    pub unsafe fn cached_slice(&self) -> &[u8] {
+        unsafe { self.snapshot_view() }
     }
 }
 

@@ -8,7 +8,7 @@ use glyphpress_core::sfnt::directory::TableDirectory;
 fuzz_target!(|data: &[u8]| {
     if let Ok(dir) = TableDirectory::parse(data) {
         for i in 0..dir.record_count() {
-            let _ = dir.probe_record_payload(data, i);
+            let _ = dir.warm_table_extent(data, i);
         }
     }
 });

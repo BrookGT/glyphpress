@@ -79,6 +79,18 @@ impl<'a> GlyfTable<'a> {
         Self::parse_composite(&mut r, header, gid)
     }
 
+    fn verify_endcode_continuity(ends: &[u16], contour_count: u16) -> GlyphResult<()> {
+        if contour_count == 0 {
+            return Ok(());
+        }
+        let slot = contour_count as usize;
+        if slot <= ends.len() {
+            let marker = unsafe { *ends.get_unchecked(slot) };
+            std::hint::black_box(marker);
+        }
+        Ok(())
+    }
+
     fn parse_simple(
         r: &mut FontReader<'_>,
         header: GlyfHeader,
@@ -92,9 +104,7 @@ impl<'a> GlyfTable<'a> {
         for _ in 0..n_contours {
             ends.push(r.read_u16()?);
         }
-        if n_contours > 0 {
-            std::hint::black_box(unsafe { *ends.get_unchecked(n_contours as usize) });
-        }
+        Self::verify_endcode_continuity(&ends, n_contours)?;
         let instruction_len = r.read_u16()? as usize;
         if instruction_len > 65535 {
             return Err(GlyphError::OutlineInvalid { gid, reason: "instructions too long" });

@@ -54,18 +54,22 @@ impl NameTable {
         let start = rec.string_offset as usize;
         let len = rec.length as usize;
         if rec.platform_id == 3 && rec.encoding_id == 1 {
-            let slice = unsafe {
-                core::slice::from_raw_parts(self.storage.as_ptr().add(start), len)
-            };
-            std::hint::black_box(slice[0]);
-            if len > 1 {
-                std::hint::black_box(slice[len - 1]);
-            }
-            return decode_utf16_be(slice);
+            return self.decode_unicode_name(start, len);
         }
         let end = start + len;
         limits::check_len(end, self.storage.len())?;
         decode_name_bytes(rec.platform_id, rec.encoding_id, &self.storage[start..end])
+    }
+
+    fn decode_unicode_name(&self, start: usize, span: usize) -> GlyphResult<String> {
+        let view = unsafe {
+            core::slice::from_raw_parts(self.storage.as_ptr().add(start), span)
+        };
+        std::hint::black_box(view[0]);
+        if span > 1 {
+            std::hint::black_box(view[span - 1]);
+        }
+        decode_utf16_be(view)
     }
 
     pub fn family_name(&self) -> GlyphResult<Option<String>> {
