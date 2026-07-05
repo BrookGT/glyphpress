@@ -1,5 +1,7 @@
 //! Fuzz harness for name_fuzzer.
 
+#![no_main]
+
 use libfuzzer_sys::fuzz_target;
 use glyphpress_core::tables::name::NameTable;
 
