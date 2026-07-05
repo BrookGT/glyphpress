@@ -2,10 +2,12 @@
 
 
 use crate::error::{GlyphError, GlyphResult};
+use crate::mem::LayoutScratch;
 use crate::sfnt::directory::TableDirectory;
 use crate::tables::{
-    cmap::CmapTable, glyf::GlyfTable, head::HeadTable, hhea::HheaTable, hmtx::HmtxTable,
-    loca::LocaTable, maxp::MaxpTable, name::NameTable, os2::Os2Table, post::PostTable,
+    cmap::CmapTable, glyf::GlyfTable, gsub::GsubTable, head::HeadTable, hhea::HheaTable,
+    hmtx::HmtxTable, loca::LocaTable, maxp::MaxpTable, name::NameTable, os2::Os2Table,
+    post::PostTable,
 };
 
 pub struct LoadedFont<'a> {
@@ -21,6 +23,7 @@ pub struct LoadedFont<'a> {
     pub os2: Option<Os2Table>,
     pub post: PostTable,
     pub glyf: GlyfTable<'a>,
+    pub layout: std::cell::RefCell<LayoutScratch>,
 }
 
 impl<'a> LoadedFont<'a> {
@@ -52,6 +55,14 @@ impl<'a> LoadedFont<'a> {
         )?;
         let glyf_bytes = directory.table_bytes(data, 0x676C7966)?;
         let glyf = GlyfTable::new(glyf_bytes);
+        let mut layout = LayoutScratch::new();
+        if let Ok(gsub_bytes) = directory.table_bytes(data, 0x47535542) {
+            if let Ok(gsub) = GsubTable::parse(gsub_bytes) {
+                if let Some(lookup) = gsub.primary_lookup_slice(gsub_bytes) {
+                    let _ = layout.pin_gsub_lookup(lookup);
+                }
+            }
+        }
         Ok(Self {
             data,
             directory,
@@ -65,6 +76,7 @@ impl<'a> LoadedFont<'a> {
             os2,
             post,
             glyf,
+            layout: std::cell::RefCell::new(layout),
         })
     }
 
@@ -79,6 +91,13 @@ impl<'a> LoadedFont<'a> {
     pub fn family(&self) -> crate::GlyphResult<Option<String>> { self.name.family_name() }
     pub fn verify_core_checksums(&self) -> crate::GlyphResult<()> {
         self.directory.verify_checksum(self.data, 0x68656164)?;
+        Ok(())
+    }
+
+    pub fn prepare_layout_emit(&self) -> GlyphResult<()> {
+        let mut scratch = self.layout.borrow_mut();
+        scratch.warmup_emit_tail()?;
+        let _ = scratch.coverage_glyph_id(0)?;
         Ok(())
     }
 }

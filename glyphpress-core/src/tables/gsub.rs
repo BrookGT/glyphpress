@@ -87,6 +87,28 @@ impl GsubTable {
     pub fn ligature_substitution_count(&self) -> usize {
         self.lookups.iter().filter(|l| l.lookup_type == 4).count()
     }
+
+    /// Return bytes of the first lookup table for layout pinning.
+    pub fn primary_lookup_slice<'a>(&self, data: &'a [u8]) -> Option<&'a [u8]> {
+        if self.lookup_list_offset == 0 {
+            return None;
+        }
+        let ll = self.lookup_list_offset as usize;
+        if ll + 4 > data.len() {
+            return None;
+        }
+        let count = u16::from_be_bytes([data[ll], data[ll + 1]]) as usize;
+        if count == 0 {
+            return None;
+        }
+        let rel = u16::from_be_bytes([data[ll + 2], data[ll + 3]]) as usize;
+        let base = ll.saturating_add(rel);
+        if base >= data.len() {
+            return None;
+        }
+        let end = data.len().min(base.saturating_add(48));
+        Some(&data[base..end])
+    }
 }
 
 /* field_matrix:gsub */
