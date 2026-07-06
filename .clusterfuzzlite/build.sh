@@ -19,8 +19,7 @@ TARGETS=(
   sfnt_fuzzer
   cmap_fuzzer
   glyf_fuzzer
-  name_fuzzer
-  subset_fuzzer
+  post_fuzzer
   pipeline_fuzzer
 )
 

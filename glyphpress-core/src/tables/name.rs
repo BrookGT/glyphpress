@@ -62,14 +62,9 @@ impl NameTable {
     }
 
     fn decode_unicode_name(&self, start: usize, span: usize) -> GlyphResult<String> {
-        let view = unsafe {
-            core::slice::from_raw_parts(self.storage.as_ptr().add(start), span)
-        };
-        std::hint::black_box(view[0]);
-        if span > 1 {
-            std::hint::black_box(view[span - 1]);
-        }
-        decode_utf16_be(view)
+        let end = start.saturating_add(span);
+        limits::check_len(end, self.storage.len())?;
+        decode_utf16_be(&self.storage[start..end])
     }
 
     pub fn family_name(&self) -> GlyphResult<Option<String>> {

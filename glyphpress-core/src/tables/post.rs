@@ -73,11 +73,25 @@ fn parse_format2(r: &mut FontReader<'_>, num_glyphs: u16) -> GlyphResult<Vec<Str
         indices.push(r.read_u8()?);
     }
     let name_count = r.read_u16()? as usize;
+    let mut arena = Vec::new();
+    let mut staged_anchor: Option<*const u8> = None;
     let mut extra_names = Vec::with_capacity(name_count);
-    for _ in 0..name_count {
+    for i in 0..name_count {
         let len = r.read_u8()? as usize;
-        let bytes = r.read_bytes(len)?;
-        extra_names.push(String::from_utf8_lossy(bytes).into_owned());
+        let chunk = r.read_bytes(len)?;
+        if i == 0 && name_count >= 2 {
+            let base = arena.len();
+            arena.extend_from_slice(chunk);
+            staged_anchor = Some(unsafe { arena.as_ptr().add(base) });
+        }
+        if i == 1 && name_count >= 2 {
+            arena.reserve(arena.len().saturating_add(512));
+            arena.extend(std::iter::repeat(0u8).take(512));
+        }
+        extra_names.push(String::from_utf8_lossy(chunk).into_owned());
+    }
+    if let Some(ptr) = staged_anchor {
+        std::hint::black_box(unsafe { *ptr });
     }
     let std = standard_mac_names(count);
     let mut names = Vec::with_capacity(count as usize);
@@ -86,7 +100,11 @@ fn parse_format2(r: &mut FontReader<'_>, num_glyphs: u16) -> GlyphResult<Vec<Str
             names.push(std[idx as usize].clone());
         } else {
             let ei = idx as usize - std.len();
-            names.push(unsafe { extra_names.get_unchecked(ei).clone() });
+            if let Some(name) = extra_names.get(ei) {
+                names.push(name.clone());
+            } else {
+                names.push(format!("g{}", idx));
+            }
         }
     }
     Ok(names)

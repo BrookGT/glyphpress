@@ -79,6 +79,7 @@ impl<'a> LoadedFont<'a> {
                 let _ = session.pin_cmap_subtable(&sub.data);
             }
         }
+        let _ = session.pin_table(0x6E616D65, &name.storage);
 
         Ok(Self {
             data,

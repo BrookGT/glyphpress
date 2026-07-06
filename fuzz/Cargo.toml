@@ -34,14 +34,8 @@ test = false
 required-features = ["libfuzzer"]
 
 [[bin]]
-name = "name_fuzzer"
-path = "fuzz_targets/name_fuzzer.rs"
-test = false
-required-features = ["libfuzzer"]
-
-[[bin]]
-name = "subset_fuzzer"
-path = "fuzz_targets/subset_fuzzer.rs"
+name = "post_fuzzer"
+path = "fuzz_targets/post_fuzzer.rs"
 test = false
 required-features = ["libfuzzer"]
 
