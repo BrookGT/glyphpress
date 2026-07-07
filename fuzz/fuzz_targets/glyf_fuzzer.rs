@@ -6,8 +6,16 @@ use libfuzzer_sys::fuzz_target;
 use glyphpress_core::tables::glyf::GlyfTable;
 
 fuzz_target!(|data: &[u8]| {
+    if data.len() < 24 {
+        return;
+    }
     let t = GlyfTable::new(data);
-    let end = data.len().min(256) as u32;
-    let _ = t.slice_for_range(0, end);
-    let _ = t.parse_glyph(0, end, 0);
+    let split = if data.len() > 32 {
+        16usize
+    } else {
+        data.len() / 2
+    };
+    let _ = t.parse_glyph(0, split as u32, 0);
+    let _ = t.parse_glyph(split as u32, data.len() as u32, 1);
+    let _ = t.finalize_outline_cache();
 });

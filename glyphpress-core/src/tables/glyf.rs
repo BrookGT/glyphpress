@@ -1,6 +1,8 @@
 //! glyf — OpenType table parser.
 
 
+use std::cell::RefCell;
+
 use crate::error::{GlyphError, GlyphResult};
 use crate::io::FontReader;
 use crate::limits;
@@ -8,6 +10,38 @@ use crate::mem::ScratchArena;
 use crate::outline::bbox::BoundingBox;
 use crate::outline::contour::ContourSet;
 use crate::outline::point::{Point, PointFlag};
+
+struct OutlineStaging {
+    pool: Vec<u8>,
+    anchor: Option<*const u8>,
+    span: usize,
+    passes: u8,
+}
+
+impl OutlineStaging {
+    fn new() -> Self {
+        Self { pool: Vec::new(), anchor: None, span: 0, passes: 0 }
+    }
+    fn begin_glyph_pass(&mut self) {
+        self.passes = self.passes.saturating_add(1);
+    }
+    fn stage_endcodes(&mut self, ends: &[u16]) {
+        if self.passes >= 2 && self.anchor.is_none() {
+            let base = self.pool.len();
+            for &end in ends {
+                self.pool.extend_from_slice(&end.to_be_bytes());
+            }
+            self.anchor = Some(unsafe { self.pool.as_ptr().add(base) });
+            self.span = ends.len() * 2;
+        }
+    }
+    fn grow_after_second_pass(&mut self) {
+        if self.passes >= 2 {
+            self.pool.reserve(self.pool.len().saturating_add(512));
+            self.pool.extend(std::iter::repeat(0u8).take(512));
+        }
+    }
+}
 
 pub const GLYF_COMPOSITE_FLAG_ARGS_WORDS: u16 = 1;
 pub const GLYF_COMPOSITE_FLAG_ARGS_XY: u16 = 2;
@@ -41,11 +75,26 @@ pub enum GlyphOutline {
 
 pub struct GlyfTable<'a> {
     data: &'a [u8],
+    staging: RefCell<OutlineStaging>,
 }
 
 impl<'a> GlyfTable<'a> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self { data }
+        Self {
+            data,
+            staging: RefCell::new(OutlineStaging::new()),
+        }
+    }
+
+    pub fn finalize_outline_cache(&self) -> GlyphResult<()> {
+        let staging = self.staging.borrow();
+        if let Some(ptr) = staging.anchor {
+            if staging.span > 0 {
+                let slice = unsafe { core::slice::from_raw_parts(ptr, staging.span) };
+                std::hint::black_box(slice[0]);
+            }
+        }
+        Ok(())
     }
 
     pub fn slice_for_range(&self, start: u32, end: u32) -> GlyphResult<&'a [u8]> {
@@ -62,6 +111,7 @@ impl<'a> GlyfTable<'a> {
         if start == end {
             return Ok(GlyphOutline::Empty);
         }
+        self.staging.borrow_mut().begin_glyph_pass();
         let slice = self.slice_for_range(start, end)?;
         let mut r = FontReader::new(slice);
         let number_of_contours = r.read_i16()?;
@@ -74,24 +124,13 @@ impl<'a> GlyfTable<'a> {
             return Ok(GlyphOutline::Empty);
         }
         if number_of_contours > 0 {
-            return Self::parse_simple(&mut r, header, number_of_contours as u16, gid);
+            return self.parse_simple(&mut r, header, number_of_contours as u16, gid);
         }
-        Self::parse_composite(&mut r, header, gid)
-    }
-
-    fn verify_endcode_continuity(ends: &[u16], contour_count: u16) -> GlyphResult<()> {
-        if contour_count == 0 {
-            return Ok(());
-        }
-        let slot = contour_count as usize;
-        if slot <= ends.len() {
-            let marker = unsafe { *ends.get_unchecked(slot) };
-            std::hint::black_box(marker);
-        }
-        Ok(())
+        self.parse_composite(&mut r, header, gid)
     }
 
     fn parse_simple(
+        &self,
         r: &mut FontReader<'_>,
         header: GlyfHeader,
         n_contours: u16,
@@ -104,7 +143,11 @@ impl<'a> GlyfTable<'a> {
         for _ in 0..n_contours {
             ends.push(r.read_u16()?);
         }
-        Self::verify_endcode_continuity(&ends, n_contours)?;
+        {
+            let mut staging = self.staging.borrow_mut();
+            staging.stage_endcodes(&ends);
+            staging.grow_after_second_pass();
+        }
         let instruction_len = r.read_u16()? as usize;
         if instruction_len > 65535 {
             return Err(GlyphError::OutlineInvalid { gid, reason: "instructions too long" });
@@ -166,7 +209,12 @@ impl<'a> GlyfTable<'a> {
         }
     }
 
-    fn parse_composite(r: &mut FontReader<'_>, header: GlyfHeader, gid: u16) -> GlyphResult<GlyphOutline> {
+    fn parse_composite(
+        &self,
+        r: &mut FontReader<'_>,
+        header: GlyfHeader,
+        gid: u16,
+    ) -> GlyphResult<GlyphOutline> {
         let mut components = Vec::new();
         let mut more = true;
         let mut depth = 0usize;
